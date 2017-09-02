@@ -280,7 +280,7 @@ def draw_fonts(args):
             a = resize(a, (0,0), fy=beta, fx=alpha, interpolation=INTER_AREA)
             
             smn = a.shape[sm]
-            offset = np.floor((L - smn) / 2.)
+            offset = int(np.floor((L - smn) / 2.))
             c = np.ones((L,L), dtype=np.uint8)*255
     #        print a
     #        print a.shape
@@ -373,11 +373,4 @@ def gen_img_rows(outfile, parallel=True):
     
 
 if __name__ == '__main__':
-    P = multiprocessing.Pool()
-    data = P.map(draw_fonts, allchars_label)
-    out = open('../datasets/font-draw-samples.txt','w')
-    outf = []
-    for let in data:
-        for fnt in let:
-            outf.append(fnt)
-    out.write('\n'.join(outf))
+    gen_img_rows('../datasets/font-draw-samples.txt')
