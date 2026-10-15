@@ -1,10 +1,12 @@
-import cPickle as pickle
 import uuid
-from utils import local_file
+try:
+    from .utils import local_file
+except ImportError:
+    from utils import local_file
 import codecs
 import json
 
-CONF_FILE = local_file('configs.pkl')
+CONF_FILE = local_file('configs.json')
 
 defaults = {
             'too_small': 7,
@@ -39,7 +41,7 @@ def add_new_config(conf):
     return
 
 def _is_duplicate_conf(all_confs, conf):
-    keys = defaults.keys()
+    keys = list(defaults.keys())
     is_duplicate = False
 
     for oconf in all_confs:
@@ -52,10 +54,10 @@ def _is_duplicate_conf(all_confs, conf):
     return is_duplicate
 
 def save_configs(confs):
-    '''Save collection of configurations'''
-    pickle.dump(confs, open(local_file(CONF_FILE), 'wb'))
+    '''Save collection of configurations (JSON — data-only, not pickle)'''
+    return json.dump(confs, codecs.open(CONF_FILE, 'w', 'utf-8'))
 
 def load_configs():
-    '''Load collection of configurations'''
-    return pickle.load(open(CONF_FILE, 'rb'))
+    '''Load collection of configurations (JSON — data-only, not pickle)'''
+    return json.load(codecs.open(CONF_FILE, 'r', 'utf-8'))
 

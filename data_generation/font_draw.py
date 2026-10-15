@@ -4,18 +4,29 @@ from PIL import ImageFont, ImageDraw, Image
 import glob
 from itertools import chain
 import numpy as np
-from scipy.misc import imresize
+try:
+    from scipy.misc import imresize
+except ImportError:
+    # scipy.misc.imresize was removed in scipy 1.3.0
+    from skimage.transform import resize
+    def imresize(arr, size):
+        return resize(arr, size, preserve_range=True).astype(arr.dtype)
 import sys
 from scipy.ndimage.filters import gaussian_filter
-import cv
+import cv2
 from scipy.ndimage.morphology import binary_erosion
-import multiprocessing
 from random import randint
 import os
+import io
 
 sys.path.append('..')
 from yik import *
 from utils import add_padding
+
+import platform
+
+if platform.system() != "Windows":
+    import multiprocessing
 
 #num, punctuation, vowels1, 
 
@@ -23,58 +34,58 @@ letters = chain(alphabet, twelve_ra_mgo, ten_la_mgo,\
     eleven_sa_mgo, seven_ya_tags, twelve_ra_tags, six_la_tags, ya_tags_stack,\
     ra_tags_stack)
 
-wa_zur = [u'\u0f40\u0fad', u'\u0f41\u0fad', u'\u0f42\u0fad', u'\u0f45\u0fad', u'\u0f49\u0fad', u'\u0f4f\u0fad', u'\u0f51\u0fad', u'\u0f59\u0fad', u'\u0f5a\u0fad', u'\u0f5e\u0fad', u'\u0f5f\u0fad', u'\u0f62\u0fad', u'\u0f63\u0fad', u'\u0f64\u0fad', u'\u0f66\u0fad', u'\u0f67\u0fad']
-roman_num = [unicode(i) for i in range(10)]
-misc_glyphs = [u'དྨ', u'གྲྭ',  u'༄',  u'༅',  u'྅',]
-skt = [u'ཧཱུཾ',u'བཱ', u'ནཱ', u'ནྟྲ', u'ཏྣ', u'ཛྲ', u'བྷ', u'ཀྟ', u'དྷ', u'ཨཱོཾ', u'ཎྜ', u'དྷི']
-retroflex = [u'ཊ',u'ཋ',u'ཌ',u'ཎ',u'ཥ',]
-other = [u'(', u')', u'༼',  u'༽', u'༔',  u'༑', ]
-other2 = [ u'〈', u'〉' , u'ཏཱ', u'ཤཱ', u'༷', u'ཿ', u'རཱ', u'ཤཱ', u'ནྟི', u'ཧཱ', u'དྡྷི',
-           u'ཀྐི', u'ཏྟ',u'ཛྙཱ', u'སྭཱ', u'ཧྲཱི', u'ཀྐོ', u'དྷེ', u'ཝཾ', u'ཀྵ', u'ལླ', u'ཧཾ',
-          u'གྷ', u'ཛྫ', u'མཱ', u'ངྒཱ', u'ཨོཾ', u'ཨཱ',u'ཁཾ', u'ཀྵི', u'བྷྱ', u'ཀཱ', u'ཥྛ', 
-          u'དཱི', u'རྦྷེ', u'ཛྲེ', u'སཱ', u'ཎྜི', u'ལཱ', u'པཱ', u'ཉྫ', u'བྷྱོ', u'ཉྩ',u'རྒྷཾ', 
-          u'ནྡ', u'ཁཱ', u'ཛྷ', u'ཤྲཱི', u'ཌི', u'ཛཱ', u'བེེ', u'ཏྤ', u'ཌཱུ', u'ནྟ', u'གཱ', 
-          u'ཤཱི', u'རྱ', u'རྶཱ', u'པཾ', u'ཙཱ', u'རྨཱ', u'ཎི', u'ཪྴ', u'བཱི', u'ངྒེ', u'ཊི', 
-          u'རཱི', u'ངྐ', u'མྦྷ', u'སྠཱ' , u'①',u'②', u'③', u'④', u'⑤', u'⑥',u'⑦', 
-          u'⑧', u'⑨', u'⑩', u'⑪', u'⑫', u'⑬', u'⑭', u'⑮', u'⑯',u'⑰', 
-          u'⑱', u'⑲', u'⑳', u'༈', u'—', u'‘', u'’', u'ཀྲྀ', u'ནྡྲ',u'ནྡྲ',u'ཛེེ',
-          u'ཉྫུ', u'སྠཱ', u'བྷཱུ', u'བྷུ',u'དྷཱུ', u'རྦྷ', u'ཌོ', u'མྦི', u'བྷེ', u'ཡྂ', u'དྷྲི',
-          u'ཧཱུྃ', u'ཤཾ', u'ཏྲྂ', u'བྂ', u'རྂ', u'ལྂ', u'སུྂ', u'ཕྱྭ', u'ཪྵ', u'ཪྷ', u'ཧཻ', 
-          u'ཅྀ', u'ཀྱྀ', u'ཛཱི', u'བྲྀ', u'ཏཱུ', u'རྻ', u'ཊོ', u'རྀ', u'ཊུ', u'ཕྱྀ', u'ཤྲི', 
-          u'ཊཱ', u'ངྒྷ', u'ནྜི', u'གཽ', u'རྞ', u'ཀྱཱ', u'རྩྭ', u'ཡཱི', u'ཛྷཻ', u'སྭོ', u'ཁྲྀ', 
-          u'ཀྐ', u'ཙྪ', u'ཏཻ', u'སྭེ', u'ཧྲཱུ', u'ལྦཱ', u'གྷཱ', u'གྷི', u'ངྐུ', u'གྷུ', u'ཤྱི', 
-          u'གྷོ', u'ཥྚ', u'སྐྲྀ', u'ཧཱུ', u'ཥྐ', u'དྔྷ', u'ཐཱ', u'ཏྠ', u'པཱུ', u'བྷྲ', u'ཇྀ', 
-          u'ཥཱ', u'ཏྱ', u'ཤྱ', u'གྷྲ', u'པྱྀ', u'ཧྲཱྀ', u'ནཱི', u'ཤྀ', u'དཱུ', u'ཏྲཱི', u'ཀཻ', 
-          u'ཤྭེ', u'ཤྐ', u'ཀཽ', u'གྒུ', u'དྷཱི', u'ཧླ', u'ཧྥ', u'ཙཱུ', u'པླུ', u'ཟྀ', u'ཉྫི', 
-          u'ཤླཽ', u'ངྒི', u'མྱྀ', u'སྟྲི', u'ཀྱཻ', u'དྲྭ', u'རྒྷ', u'དྲྀ', u'ཏྭོ', u'ཧྥི', u'ཀྲཱ', 
-          u'ནྟུ', u'ཧྥུ', u'ཧྥེ', u'ཧྥོ', u'སྠ', u'གཱི', u'ཞྀ', u'ཉྀ', u'ཀྵྀ', u'ཀཱུ', u'གྱྀ', 
-          u'བྱཱ', u'ཀྴི', u'ཁཱེ', u'སྷོ', u'རཱུ', u'ཉྪ', u'དཱ', u'དྡྷཱ', u'ངྷྲུ', u'ཧྨ', u'ཊཱི', 
-          u'དྷྭ', u'ནཻ', u'མྲྀ', u'ནྡྷེ', u'ནྡྷོ', u'ཨཽ', u'ལླཱི', u'ནྡྷུ', u'གྷྲི', u'ལཱི', u'ངྒ', 
-          u'དྐུ', u'པྟ', u'དྨཱ', u'ཨཱོ', u'ཏཱི', u'ཉྩི', u'དྨེ', u'དྨོ', u'མཻ', u'དྷོ', u'སྟྱ', 
-          u'ལླེ', u'སཱི', u'དྷུ', u'ནྡྷ', u'ལླི', u'མྦྷི', u'ཊྭཱ', u'ྈ', u'ནྱ', u'ཥེ', u'ཡཱ', 
-          u'ནྨ', u'ཁྱྀ', u'ཌཱ', u'བྷོ', u'འྀ', u'ཨྱོ', u'ཨྱཽ', u'ཏྱཱ', u'བྷྲི', u'ཤྲ', u'བྷཱ', 
-          u'བྷི', u'ནྡི', u'ནྀ', u'ཥི', u'དྷྲ', u'དྷྱ', u'ནྡྷི', u'ཛྙ', u'སཽ', u'ཝཱ', u'ལྱ', 
-          u'མཱུ', u'དྭོ', u'ཀྵུ', u'ཀྞི', u'ཥྚི', u'རྤཱ', u'བཻ', u'མྦུ', u'ཛྭ', u'༵', u'དྡྷ',
-          u'ནྡེ', u'སྨྲྀ', u'མེེ', u'ཀྵེ', u'ཀྵིཾ', u'སཾ', u'ཪྻཱ', u'དྷྱཱ', u'ཧྱེ', u'བཾ', u'སྫ',
-          u'ཝཱི', u'྾', u'ཥྤེ', u'ནེེ', u'ཊྭཱཾ', u'དྷཱ', u'ལཱུ', u'ཕྲོཾ', u'མྨུ', u'ཏྨ', u'ཎྜཾ',
-          u'མཱཾ', u'ནྣི', u'སྟྲ', u'སྟྭཾ',u'ཏྤཱ', u'ཥྚྲྀ', u'ཥྚྲྀ', u'ཉྩཱ', u'ཧྱ', u'ཏྟྭཾ', u'ཛྙོ',
-          u'ཤྩ',u'ཏྭེ',u'ཌྷོ',u'ཥྱོ', u'ཀྟོ', u'ཏྲེེ', u'ཛྲཱི', u'ཊཾ', u'མྨེ', u'ོ', u'གྣེ',
-          u'གྣ', u'གྣི', u'༴', u'ཪྻ', u'བྷྲཱུཾ', u'རཾ', u'ཡཾ', u'ཋཱ', u'པེཾ', u'ལིཾ', u'སྥ',
-          u'ཀེཾ', u'ཀྩི', u'ཏྲཾ', u'མྺ', u'རྭི', u'ཏྟི', u'ཉྩུ', u'ལྐཾ', u'ལཾ', u'ཉྫཾ', u'རྔྷི',
-          u'སཱཾ', u'ཊེ', u'ཋི', u'ནཾ', u'ཎྛ', u'ཎྛཱི', u'ཎྛོ', u'ཉྪ', u'ཀཾ', u'ཋོ', u'ཋཾ',
-          u'གྷྣཱ', u'ཙྩ', u'ཛྫུ', u'ཌྜི', u'ཌྷ', u'ཀཱི', u'བྫ', u'བྷྣྱ', u'ཪྻཾ', u'ཥྐུ', u'ཧྣཱ', 
-          u'ཀྵྞཱ', u'ཨཱི', u'ཙྪཱ', u'ཊྚ', u'མྤ', u'རྦྦ', u'པྟཾ', u'རྞེ', u'སྨཾ', u'ཥྷ', u'རྡྷ', 
-          u'ཧྨེ', u'ནྡྲི', u'ཪྵི', u'ཎཱ', u'ཎུ', u'ཎོ', u'ཎཾ', u'ཏྤུ', u'ཏྤཱུ', u'ཥུ', u'ནཱཾ', 
-          u'ཏྲྀ', u'ཏྱུ', u'ཏྭཱ', u'ཏྭི', u'ནྣཱི', u'ཐྱཱ', u'ཏྻི', u'ནྟཱ', u'ནྟྭ', u'ནྠ', u'ནྟྭ', 
-          u'ནྠི', u'ཪྤྤ', u'རྦྱ', u'པྱཱ', u'ཎྜུ', u'ཉྥ', u'བྱཾ', u'མྠ', u'མྤ', u'མྤི', u'མྤྱ', 
-          u'མྤྲཾ', u'མྦ', u'མྦོ', u'མྦྱ', u'མླི', u'ཏཾ', u'བྠཱ', u'ཪྪེ', u'རྞི', u'རྞོ',  u'རྞྞ',
-          u'ཊྚི', u'ཥྚཾ', u'མུཾ',u'ཀྟི', u'གྷེེ', u'དྲུཾ', u'ལྱེ', u'ཀྷྃ',u'ཏྲཱ' , u'▶▶', u'[',
-          u']', u'སྫོ', u'ཟྱ', u'ཨྠིྀ', u'བྷེེ']
+wa_zur = ['\u0f40\u0fad', '\u0f41\u0fad', '\u0f42\u0fad', '\u0f45\u0fad', '\u0f49\u0fad', '\u0f4f\u0fad', '\u0f51\u0fad', '\u0f59\u0fad', '\u0f5a\u0fad', '\u0f5e\u0fad', '\u0f5f\u0fad', '\u0f62\u0fad', '\u0f63\u0fad', '\u0f64\u0fad', '\u0f66\u0fad', '\u0f67\u0fad']
+roman_num = [str(i) for i in range(10)]
+misc_glyphs = ['དྨ', 'གྲྭ',  '༄',  '༅',  '྅',]
+skt = ['ཧཱུཾ','བཱ', 'ནཱ', 'ནྟྲ', 'ཏྣ', 'ཛྲ', 'བྷ', 'ཀྟ', 'དྷ', 'ཨཱོཾ', 'ཎྜ', 'དྷི']
+retroflex = ['ཊ','ཋ','ཌ','ཎ','ཥ',]
+other = ['(', ')', '༼',  '༽', '༔',  '༑', ]
+other2 = [ '〈', '〉' , 'ཏཱ', 'ཤཱ', '༷', 'ཿ', 'རཱ', 'ཤཱ', 'ནྟི', 'ཧཱ', 'དྡྷི',
+           'ཀྐི', 'ཏྟ','ཛྙཱ', 'སྭཱ', 'ཧྲཱི', 'ཀྐོ', 'དྷེ', 'ཝཾ', 'ཀྵ', 'ལླ', 'ཧཾ',
+          'གྷ', 'ཛྫ', 'མཱ', 'ངྒཱ', 'ཨོཾ', 'ཨཱ','ཁཾ', 'ཀྵི', 'བྷྱ', 'ཀཱ', 'ཥྛ', 
+          'དཱི', 'རྦྷེ', 'ཛྲེ', 'སཱ', 'ཎྜི', 'ལཱ', 'པཱ', 'ཉྫ', 'བྷྱོ', 'ཉྩ','རྒྷཾ', 
+          'ནྡ', 'ཁཱ', 'ཛྷ', 'ཤྲཱི', 'ཌི', 'ཛཱ', 'བེེ', 'ཏྤ', 'ཌཱུ', 'ནྟ', 'གཱ', 
+          'ཤཱི', 'རྱ', 'རྶཱ', 'པཾ', 'ཙཱ', 'རྨཱ', 'ཎི', 'ཪྴ', 'བཱི', 'ངྒེ', 'ཊི', 
+          'རཱི', 'ངྐ', 'མྦྷ', 'སྠཱ' , '①','②', '③', '④', '⑤', '⑥','⑦', 
+          '⑧', '⑨', '⑩', '⑪', '⑫', '⑬', '⑭', '⑮', '⑯','⑰', 
+          '⑱', '⑲', '⑳', '༈', '—', '‘', '’', 'ཀྲྀ', 'ནྡྲ','ནྡྲ','ཛེེ',
+          'ཉྫུ', 'སྠཱ', 'བྷཱུ', 'བྷུ','དྷཱུ', 'རྦྷ', 'ཌོ', 'མྦི', 'བྷེ', 'ཡྂ', 'དྷྲི',
+          'ཧཱུྃ', 'ཤཾ', 'ཏྲྂ', 'བྂ', 'རྂ', 'ལྂ', 'སུྂ', 'ཕྱྭ', 'ཪྵ', 'ཪྷ', 'ཧཻ', 
+          'ཅྀ', 'ཀྱྀ', 'ཛཱི', 'བྲྀ', 'ཏཱུ', 'རྻ', 'ཊོ', 'རྀ', 'ཊུ', 'ཕྱྀ', 'ཤྲི', 
+          'ཊཱ', 'ངྒྷ', 'ནྜི', 'གཽ', 'རྞ', 'ཀྱཱ', 'རྩྭ', 'ཡཱི', 'ཛྷཻ', 'སྭོ', 'ཁྲྀ', 
+          'ཀྐ', 'ཙྪ', 'ཏཻ', 'སྭེ', 'ཧྲཱུ', 'ལྦཱ', 'གྷཱ', 'གྷི', 'ངྐུ', 'གྷུ', 'ཤྱི', 
+          'གྷོ', 'ཥྚ', 'སྐྲྀ', 'ཧཱུ', 'ཥྐ', 'དྔྷ', 'ཐཱ', 'ཏྠ', 'པཱུ', 'བྷྲ', 'ཇྀ', 
+          'ཥཱ', 'ཏྱ', 'ཤྱ', 'གྷྲ', 'པྱྀ', 'ཧྲཱྀ', 'ནཱི', 'ཤྀ', 'དཱུ', 'ཏྲཱི', 'ཀཻ', 
+          'ཤྭེ', 'ཤྐ', 'ཀཽ', 'གྒུ', 'དྷཱི', 'ཧླ', 'ཧྥ', 'ཙཱུ', 'པླུ', 'ཟྀ', 'ཉྫི', 
+          'ཤླཽ', 'ངྒི', 'མྱྀ', 'སྟྲི', 'ཀྱཻ', 'དྲྭ', 'རྒྷ', 'དྲྀ', 'ཏྭོ', 'ཧྥི', 'ཀྲཱ', 
+          'ནྟུ', 'ཧྥུ', 'ཧྥེ', 'ཧྥོ', 'སྠ', 'གཱི', 'ཞྀ', 'ཉྀ', 'ཀྵྀ', 'ཀཱུ', 'གྱྀ', 
+          'བྱཱ', 'ཀྴི', 'ཁཱེ', 'སྷོ', 'རཱུ', 'ཉྪ', 'དཱ', 'དྡྷཱ', 'ངྷྲུ', 'ཧྨ', 'ཊཱི', 
+          'དྷྭ', 'ནཻ', 'མྲྀ', 'ནྡྷེ', 'ནྡྷོ', 'ཨཽ', 'ལླཱི', 'ནྡྷུ', 'གྷྲི', 'ལཱི', 'ངྒ', 
+          'དྐུ', 'པྟ', 'དྨཱ', 'ཨཱོ', 'ཏཱི', 'ཉྩི', 'དྨེ', 'དྨོ', 'མཻ', 'དྷོ', 'སྟྱ', 
+          'ལླེ', 'སཱི', 'དྷུ', 'ནྡྷ', 'ལླི', 'མྦྷི', 'ཊྭཱ', 'ྈ', 'ནྱ', 'ཥེ', 'ཡཱ', 
+          'ནྨ', 'ཁྱྀ', 'ཌཱ', 'བྷོ', 'འྀ', 'ཨྱོ', 'ཨྱཽ', 'ཏྱཱ', 'བྷྲི', 'ཤྲ', 'བྷཱ', 
+          'བྷི', 'ནྡི', 'ནྀ', 'ཥི', 'དྷྲ', 'དྷྱ', 'ནྡྷི', 'ཛྙ', 'སཽ', 'ཝཱ', 'ལྱ', 
+          'མཱུ', 'དྭོ', 'ཀྵུ', 'ཀྞི', 'ཥྚི', 'རྤཱ', 'བཻ', 'མྦུ', 'ཛྭ', '༵', 'དྡྷ',
+          'ནྡེ', 'སྨྲྀ', 'མེེ', 'ཀྵེ', 'ཀྵིཾ', 'སཾ', 'ཪྻཱ', 'དྷྱཱ', 'ཧྱེ', 'བཾ', 'སྫ',
+          'ཝཱི', '྾', 'ཥྤེ', 'ནེེ', 'ཊྭཱཾ', 'དྷཱ', 'ལཱུ', 'ཕྲོཾ', 'མྨུ', 'ཏྨ', 'ཎྜཾ',
+          'མཱཾ', 'ནྣི', 'སྟྲ', 'སྟྭཾ','ཏྤཱ', 'ཥྚྲྀ', 'ཥྚྲྀ', 'ཉྩཱ', 'ཧྱ', 'ཏྟྭཾ', 'ཛྙོ',
+          'ཤྩ','ཏྭེ','ཌྷོ','ཥྱོ', 'ཀྟོ', 'ཏྲེེ', 'ཛྲཱི', 'ཊཾ', 'མྨེ', 'ོ', 'གྣེ',
+          'གྣ', 'གྣི', '༴', 'ཪྻ', 'བྷྲཱུཾ', 'རཾ', 'ཡཾ', 'ཋཱ', 'པེཾ', 'ལིཾ', 'སྥ',
+          'ཀེཾ', 'ཀྩི', 'ཏྲཾ', 'མྺ', 'རྭི', 'ཏྟི', 'ཉྩུ', 'ལྐཾ', 'ལཾ', 'ཉྫཾ', 'རྔྷི',
+          'སཱཾ', 'ཊེ', 'ཋི', 'ནཾ', 'ཎྛ', 'ཎྛཱི', 'ཎྛོ', 'ཉྪ', 'ཀཾ', 'ཋོ', 'ཋཾ',
+          'གྷྣཱ', 'ཙྩ', 'ཛྫུ', 'ཌྜི', 'ཌྷ', 'ཀཱི', 'བྫ', 'བྷྣྱ', 'ཪྻཾ', 'ཥྐུ', 'ཧྣཱ', 
+          'ཀྵྞཱ', 'ཨཱི', 'ཙྪཱ', 'ཊྚ', 'མྤ', 'རྦྦ', 'པྟཾ', 'རྞེ', 'སྨཾ', 'ཥྷ', 'རྡྷ', 
+          'ཧྨེ', 'ནྡྲི', 'ཪྵི', 'ཎཱ', 'ཎུ', 'ཎོ', 'ཎཾ', 'ཏྤུ', 'ཏྤཱུ', 'ཥུ', 'ནཱཾ', 
+          'ཏྲྀ', 'ཏྱུ', 'ཏྭཱ', 'ཏྭི', 'ནྣཱི', 'ཐྱཱ', 'ཏྻི', 'ནྟཱ', 'ནྟྭ', 'ནྠ', 'ནྟྭ', 
+          'ནྠི', 'ཪྤྤ', 'རྦྱ', 'པྱཱ', 'ཎྜུ', 'ཉྥ', 'བྱཾ', 'མྠ', 'མྤ', 'མྤི', 'མྤྱ', 
+          'མྤྲཾ', 'མྦ', 'མྦོ', 'མྦྱ', 'མླི', 'ཏཾ', 'བྠཱ', 'ཪྪེ', 'རྞི', 'རྞོ',  'རྞྞ',
+          'ཊྚི', 'ཥྚཾ', 'མུཾ','ཀྟི', 'གྷེེ', 'དྲུཾ', 'ལྱེ', 'ཀྷྃ','ཏྲཱ' , '▶▶', '[',
+          ']', 'སྫོ', 'ཟྱ', 'ཨྠིྀ', 'བྷེེ']
 ### Extended
 #other = [u'(', u')', u'༼',  u'༽', u'༔',  u'༑' ] # comment out above "other" if use this
-english_alphbet = list(u'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ')
-english_punc = list(u'!"#$%&*+,—/:;<=>?@[]{}')
-english_misc = list(u'〈〉①②③④⑤⑥⑦⑧⑨⑩¶')
+english_alphbet = list('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ')
+english_punc = list('!"#$%&*+,—/:;<=>?@[]{}')
+english_misc = list('〈〉①②③④⑤⑥⑦⑧⑨⑩¶')
 english_attached = 'oo ar ri ri ki ak ry ar ar ri ri fl th ary ry ar th art ry try tt ar od th tt ki ri rm tt ar th a/ as ar ar fi art ri'.split(' ')
 other_extended = []
 
@@ -89,7 +100,7 @@ for i in letters:
 #        k+=1
 #        print '\t',k, i+jརྔྷི
 
-allchars = list(chain(everything, [u'་',u'།'], num, wa_zur, roman_num, misc_glyphs, skt, retroflex, other, other2))
+allchars = list(chain(everything, ['་','།'], num, wa_zur, roman_num, misc_glyphs, skt, retroflex, other, other2))
 #allchars = list(chain(everything, [u'་',u'།'], num, wa_zur, roman_num, misc_glyphs, skt, retroflex, other, english_alphbet, english_punc, english_misc, other2, other_extended))
 
 # import codecs
@@ -117,15 +128,15 @@ allchars = list(chain(everything, [u'་',u'།'], num, wa_zur, roman_num, misc_
 ###########
 
 
-allchars_label = zip(range(len(allchars)),allchars)
+allchars_label = list(zip(list(range(len(allchars))),allchars))
 #print len(allchars)
-import shelve
-
-## NORMAL DICT
-s = shelve.open('../allchars_dict2')
-s['allchars'] = dict((j,i) for i,j in allchars_label)
-s['label_chars'] = dict((i, j) for i,j in allchars_label)
-s.close()
+## NORMAL DICT — write the modern gzip+JSON char maps (data-only, not shelve/pickle)
+import sys as _sys, os as _os
+_root = _os.path.abspath(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)), '..'))
+_sys.path.insert(0, _root)
+from safe_model_io import dump_model
+dump_model(dict((j, i) for i, j in allchars_label), _os.path.join(_root, 'allchars.json.gz'))
+dump_model(dict((i, j) for i, j in allchars_label), _os.path.join(_root, 'label_chars.json.gz'))
 ####
 
 ### EXTENDED
@@ -137,8 +148,8 @@ s.close()
 #sys.exit()
 #import os
 fonts = glob.glob('*ttf')
-sample_word = u'བསྒྲུབས'
-sample_word = u'ཆ'
+sample_word = 'བསྒྲུབས'
+sample_word = 'ཆ'
 fontnames = ['Tibetan BZDMT Uni',
  'Tibetan Machine Uni',
  'Qomolangma-Uchen Sarchen',
@@ -239,13 +250,10 @@ def draw_fonts(args):
             context.set_source_rgb(0, 0, 0)
             pangocairo_context.update_layout(layout)
             pangocairo_context.show_layout(layout)
-            fname = "/tmp/%s%d.png" % (fontname, randint(0,20000000))
-            with open(fname, "wb") as image_file:
-                    surf.write_to_png(image_file)
-        
-            im = Image.open(fname)
-            os.remove(fname)
+            
+            im = Image.frombuffer("RGBA", (surf.get_width(), surf.get_height()), surf.get_data(), "raw", "RGBA",0 ,1)
             im = im.convert('L')
+            
             a = np.asarray(im)
             a = trim(a)
             a = add_padding(a, padding=2)
@@ -363,7 +371,7 @@ def gen_img_rows(outfile, parallel=True):
         p = multiprocessing.Pool()
         data = p.map(draw_fonts, allchars_label)
     else:
-        data = map(draw_fonts, allchars_label)
+        data = list(map(draw_fonts, allchars_label))
     out = open(outfile, 'w')
     outf = []
     for let in data:
@@ -373,4 +381,7 @@ def gen_img_rows(outfile, parallel=True):
     
 
 if __name__ == '__main__':
-    gen_img_rows('../datasets/font-draw-samples.txt')
+    if platform.system() == "Windows":
+        gen_img_rows(r'..\datasets\font-draw-samples.txt', False)
+    else:
+        gen_img_rows('../datasets/font-draw-samples.txt')

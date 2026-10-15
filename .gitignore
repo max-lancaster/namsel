@@ -97,4 +97,9 @@ Vagrantfile
 allchars_dict2
 fast_utils.c
 viterbi_cython.c
+# OCR run outputs
+ocr_output.txt
+debug_output.txt
+data/out/
+properly_fixed_output.txt
 /white-lotus-garland

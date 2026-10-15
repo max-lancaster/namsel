@@ -1,25 +1,28 @@
 # encoding: utf-8
 
-import yik
+try:
+    from . import yik
+except ImportError:
+    import yik
 import codecs
 import re
 
-test_str = u'''ད་རིང་བོད་ཀྱི་ས་ཁུལ་ཨ་མདོ་འཛམ་ཐང་ནང་རང་ལོ་་་ ༣༠ ཡིན་པའི་སྐྱེད་མ་གཅིག་གིས་རང་ལུས་མེར་བསྲེགས་བཏང་ནས་རྒྱ་ནག་གཞུང་ལ་ངོ་རྒོལ་གནང་རྗེས་འདས་གྲོངས་སོང་འདུག་པ་དང་། 
+test_str = '''ད་རིང་བོད་ཀྱི་ས་ཁུལ་ཨ་མདོ་འཛམ་ཐང་ནང་རང་ལོ་་་ ༣༠ ཡིན་པའི་སྐྱེད་མ་གཅིག་གིས་རང་ལུས་མེར་བསྲེགས་བཏང་ནས་རྒྱ་ནག་གཞུང་ལ་ངོ་རྒོལ་གནང་རྗེས་འདས་གྲོངས་སོང་འདུག་པ་དང་། 
 བུ་ཕྲུག་བཞིའི་ཨ་མ་ཡིན་པ་སྐལ་སྐྱིད་ལགས་ཀྱིས་ད་རིང་བོད་ཀྱི་དུས་ཚོད་ལྟར་བྱས་ན་ཉིན་རྒྱབ་ཚོུད་ ༣ དང་སྐར་མ་སུམ་ཅུ་ཙམ་ལ་འཛམ་ཐང་ཇོ་ནང་དགོན་ཆེན་གྱི་ཉེ་འགྲམ་དུ་རང་ལུས་མེ་ལ་བསྲེགས་'''    
 
 def load_normalize_ocr(flname):
     tiffname_start = 'tbocrtifs'
-    page_ignore = u'༄༅། །'
+    page_ignore = '༄༅། །'
     
     contents = codecs.open(flname, 'r', 'utf-8').readlines()
     contents = [l for l in contents if not l.startswith(tiffname_start)]
     contents = ''.join(contents)
     contents = contents.replace(page_ignore, '')
-    contents = contents.replace(u'༄༅', '')
+    contents = contents.replace('༄༅', '')
     
-    contents = re.sub(ur'[་]{2,}\n', u'་\n', contents) 
+    contents = re.sub(r'[་]{2,}\n', '་\n', contents) 
     contents = contents.replace('\n', '')
-    contents = re.sub(ur'^This.*corrections\.', '', contents) 
+    contents = re.sub(r'^This.*corrections\.', '', contents) 
 
     return contents
 
@@ -51,7 +54,7 @@ def parse_syllables(tstr, omit_tsek=True):
             if current_syll:
                 all_syllables.append(''.join(current_syll))
                 current_syll = []
-            if i == u'་' and omit_tsek: 
+            if i == '་' and omit_tsek: 
                     continue
             else:
                 all_syllables.append(i)
@@ -61,8 +64,8 @@ def parse_syllables(tstr, omit_tsek=True):
             
     
 if __name__ == '__main__':
-    for stack in parse_stacks(u'བདགརབ'):
-        print stack,
+    for stack in parse_stacks('བདགརབ'):
+        print(stack, end=' ')
 
     for syl in parse_syllables(test_str, omit_tsek=False):
-        print syl
+        print(syl)

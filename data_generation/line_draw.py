@@ -2,7 +2,7 @@
 import cairo
 import pango
 import pangocairo
-from font_draw import fontnames, trim
+from .font_draw import fontnames, trim
 from random import randint
 from PIL import Image
 from utils import add_padding
@@ -80,14 +80,14 @@ def draw_line(line, outpath, spacing='normal', gtpath = None):
         Image.fromarray(a*255).save(fname)
         
         codecs.open(gtpath + fontname + '.gt.txt', 'w', 'utf-8').write(line)
-    print allmatch
+    print(allmatch)
     
 def draw_line2(line, font, size):
 #     size = "40"
-    if line.strip().endswith(u'་'):
-        line = line.strip(u'་')
-        line = line + u'་'
-    line = line.strip(u' ')
+    if line.strip().endswith('་'):
+        line = line.strip('་')
+        line = line + '་'
+    line = line.strip(' ')
     w = 8000
     h = 250
     spacing = 'normal' # this doesn't seem to work anyway
@@ -152,10 +152,10 @@ def draw_lines_from_file(fl, outdir='generated-line-imgs', \
     for i, line in enumerate(fl):
         if limit and i > limit:
             break
-        line = line.strip(u' ་')
+        line = line.strip(' ་')
         if not line:
             continue
-        print line
+        print(line)
 #         line = next(fl).strip()
         outfilepath = os.path.join(outdir, '%06d-' % i) 
         gtoutfilepath = os.path.join(outdir_gt, '%06d-' % i) 
@@ -188,7 +188,7 @@ if __name__ == '__main__':
         line = line.strip()
         if not line:
             continue
-        print line
+        print(line)
 #         line = next(fl).strip()
         outfilepath = os.path.join(outdir, '%06d-' % i) 
         gtoutfilepath = os.path.join(gtoutdir, '%06d-' % i) 

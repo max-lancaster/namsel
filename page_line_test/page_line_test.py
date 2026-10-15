@@ -1,6 +1,13 @@
-import Image
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from page_elements2 import PageElements
+
+from PIL import Image
 import numpy as np
 from page_elements2 import PageElements
+
 
 
 line_nums = {
@@ -35,9 +42,9 @@ for key, val in sorted(line_nums.items()):
     a = np.asarray(im)/255
     p = PageElements(a, page_type='pecha')
     is_match = val == p.num_lines
-    print key, val, 'actual', p.num_lines, 'predicted', "match?", is_match
+    print(key, val, 'actual', p.num_lines, 'predicted', "match?", is_match)
     if not is_match:
         fails += 1
     res.append(is_match)
 
-print "All matched?", all(res), '(fails: %d of %d)' % (fails, len(res))
+print("All matched?", all(res), '(fails: %d of %d)' % (fails, len(res)))

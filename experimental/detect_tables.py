@@ -26,7 +26,7 @@ def find_boxes(tiff_fl, blur=False):
         cnt = cv.approxPolyDP(cnt, 0.02*cnt_len, True)
         if len(cnt) == 4 and ((a.shape[0]-3) * (a.shape[1] -3)) > cv.contourArea(cnt) > 1000 and cv.isContourConvex(cnt):
             cnt = cnt.reshape(-1, 2)
-            max_cos = np.max([angle_cos( cnt[i], cnt[(i+1) % 4], cnt[(i+2) % 4] ) for i in xrange(4)])
+            max_cos = np.max([angle_cos( cnt[i], cnt[(i+1) % 4], cnt[(i+2) % 4] ) for i in range(4)])
             if max_cos < 0.1:
                 b = cv.boundingRect(orig_cnt)
                 x,y,w,h = b
@@ -65,7 +65,7 @@ def organize_boxes(boxes):
 
 def DFS(tree, v, func=None):
     tree[v]['discovered'] = True
-    print 'visited node', v
+    print('visited node', v)
 #     raw_input()
 #     if func:
 #         func(tree[v])
@@ -85,7 +85,7 @@ def visualize_tree_page(flpath, tree, boxes):
 #     draw = ImageDraw.Draw(im)
     for i in range(len(boxes)):
         x,y,w,h = boxes[i]
-        print 'node', i, 'contains', tree[i]['children']
+        print('node', i, 'contains', tree[i]['children'])
         cv.rectangle(arr, (x,y), (x+w, y+h), 0)
         cv.putText(arr, str(i), (x-5, y-5), cv.FONT_HERSHEY_SIMPLEX, 1, 0)
 
@@ -98,7 +98,7 @@ def visualize_tree_graphviz(flpath, tree, boxes):
     G=pgv.AGraph()
     
     for i in range(len(boxes)-1, -1, -1):
-        print 'node', i, 'contains', tree[i]['children']
+        print('node', i, 'contains', tree[i]['children'])
         for node in tree[i]['children']:
             G.add_edge(str(i), str(node))
         else:
@@ -116,10 +116,10 @@ def find_tables_in_volume(vol_dir):
     tiffs = glob.glob(os.path.join(vol_dir, '*tif'))
      
     p = multiprocessing.Pool()
-    print 'detecting boxes'
+    print('detecting boxes')
     now = datetime.datetime.now()
     boxes = p.map(find_boxes, tiffs)
-    print 'checking for tables i.e. pages w/ > 3 boxes(!?!)'
+    print('checking for tables i.e. pages w/ > 3 boxes(!?!)')
     for tiff, pboxes in zip(tiffs, boxes):
         if len(pboxes) > 3:
             shutil.copy(tiff, TABLE_DIR)
@@ -145,7 +145,7 @@ def find_tables_in_volume(vol_dir):
                     Image.fromarray(section).save(os.path.join(TABLE_DIR, 'sections/x%d_y%d_w%d_h%d.tif' % b ))
 
     
-    print datetime.datetime.now() - now
+    print(datetime.datetime.now() - now)
     
 
 def traverse_page_nodes(tree, func=None):
@@ -153,7 +153,7 @@ def traverse_page_nodes(tree, func=None):
     for k in tree:
         if not tree[k]['parent']:
 #             no_parent.append(k)
-            print 'New tree traversal'
+            print('New tree traversal')
             DFS(tree, k, func=func)
 
 def find_tables_in_dirtree(root_dir):
@@ -165,7 +165,7 @@ def find_tables_in_dirtree(root_dir):
         os.mkdir(TABLE_DIR)
     objs = []
     p = multiprocessing.Pool()
-    print 'walking directory', root_dir
+    print('walking directory', root_dir)
     for a,b,c in os.walk(root_dir):
         if a.endswith('cache'): # ignore scantailor cache folders
             continue
@@ -183,22 +183,22 @@ def find_tables_in_dirtree(root_dir):
         loop+=1
         continue
     
-    print 'copying found pages to temporary dir for review'
+    print('copying found pages to temporary dir for review')
     for fulparpath, relpath, fl, res in objs:
         try:
             res = res.get()
         except:
-            print fl
+            print(fl)
             continue
         if len(res) > 2:
             path = os.path.join(TABLE_DIR, relpath)
-            print path
+            print(path)
             if not os.path.exists(path):
                 os.makedirs(path)
                 try:
                     shutil.copy(os.path.join(fulparpath, fl), path)
                 except:
-                    print fulparpath, fl
+                    print(fulparpath, fl)
 
 if __name__ == '__main__':
     import multiprocessing

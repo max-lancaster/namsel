@@ -4,7 +4,7 @@ from cv2 import Sobel
 cimport numpy as np
 cimport cython
 from libc.math cimport sqrt, atan2, fmod, M_PI
-ctypedef np.int_t DTYPE_t
+ctypedef np.intp_t DTYPE_t
 
 @cython.boundscheck(False)
 @cython.nonecheck(False)

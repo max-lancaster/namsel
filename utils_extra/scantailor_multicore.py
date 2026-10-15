@@ -1,11 +1,15 @@
 #! /usr/bin/env python
 
 from subprocess import Popen
-from multiprocessing import Pool, cpu_count
 import sys
 import glob
 import os
 from functools import partial
+
+import platform
+
+if platform.system() != "Windows":
+    from multiprocessing import Pool, cpu_count
 
 def process_tifs(fl, threshold, layout=1):
     """
@@ -14,7 +18,7 @@ def process_tifs(fl, threshold, layout=1):
     orientation=right means rotate right 90 deg
     """
     
-    print fl
+    print(fl)
     out_folder=os.path.join(os.path.dirname(fl), 'out')
     command = ['scantailor-cli',  '--layout={}'.format(layout), \
                '--margins=1','--output-dpi=600', \
@@ -50,7 +54,7 @@ def run_scantailor(folder, threshold, layout='single', processes=None):
     if not os.path.exists(out_folder):
         os.mkdir(out_folder)
     
-    print 'starting to process images at threshold = {}'.format(threshold)
+    print('starting to process images at threshold = {}'.format(threshold))
     
     if layout == 'single' or layout is None:
         layout = 1
@@ -58,11 +62,15 @@ def run_scantailor(folder, threshold, layout='single', processes=None):
         layout = 2
     
     process_tifs2 = partial(process_tifs, threshold=threshold, layout=layout)
-    if not processes:
-        processes = cpu_count()
-    p = Pool(processes=processes, maxtasksperchild=30)
-    p.map(process_tifs2, tifs)
-    p.terminate()
+
+    if platform.system() == "Windows":
+        list(map(process_tifs2, tifs))
+    else:
+        if not processes:
+            processes = cpu_count()
+        p = Pool(processes=processes, maxtasksperchild=30)
+        p.map(process_tifs2, tifs)
+        p.terminate()
     
 
 if __name__ == '__main__':
@@ -70,7 +78,7 @@ if __name__ == '__main__':
     try:
         folder = sys.argv[1]
         
-        print folder, 'FOLDER'
+        print(folder, 'FOLDER')
         if len(sys.argv) == 3:
             threshold = sys.argv[2]
     except:

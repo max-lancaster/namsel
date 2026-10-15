@@ -32,7 +32,7 @@ cpdef viterbi_cython(int n_observations, int n_components,
     cdef np.float32_t mx = _NINF
     cdef int i, j
     cdef np.ndarray[double, ndim = 2] viterbi_lattice = _NINF*np.ones((n_observations, n_components))
-    cdef np.ndarray[np.int_t, ndim = 1] state_sequence = np.empty(n_observations, dtype=np.int)
+    cdef np.ndarray[np.intp_t, ndim = 1] state_sequence = np.empty(n_observations, dtype=np.intp)
     cdef dtype_t logprob
     
     cdef float NINF = -np.inf

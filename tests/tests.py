@@ -1,4 +1,4 @@
-from sklearn.externals import joblib
+import joblib
 import os
 
 def check_scaler():

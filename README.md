@@ -1,211 +1,178 @@
-# Namsel OCR
-An OCR application focused on machine-print Tibetan text
+# Namsel-BUDA OCR
 
-Tested only on Ubuntu 14.04 and higher. 
+**Modern OCR for machine-print Tibetan — a fully modernized fork of [Namsel OCR](https://github.com/thubtenrigzin/namsel-ocr), ported to Python 3.12 with a convolutional-neural-network character recognizer and safe, pickle-free model formats.**
 
-An overview of the Namsel project can be found in [our article in the journal Himalayan Linguistics](https://escholarship.org/uc/item/6d5781k5).
+Namsel-BUDA is maintained by **Tashi Rabten** ([Associação BUDA](https://github.com/TashiRabten)) as the Tibetan OCR engine of the **BUDA** application suite. It keeps the proven Namsel OCR pipeline — page layout analysis, line segmentation, feature extraction, and HMM/probability-based recognition with post-processing — and replaces the aging hand-crafted classifier with a trained CNN, while modernizing the entire code base for current Python and safe model loading.
 
-Check out our library partner for already OCR'd digital text: http://tbrc.org. 
+---
 
-## Install:
+## Where it is used
+
+Namsel-BUDA is not a stand-alone research toy — it is the **OCR engine embedded in [TradutorBUDA](https://TashiRabten.github.io/BUDA_APPs_Port/)**, a Java Tibetan translation and text-processing application for Buddhist terminology workflows. TradutorBUDA calls this engine (via its daemon interface) to turn scanned Tibetan pages into editable Unicode text, which then feeds dictionary lookup, transliteration, tokenization, and translation.
+
+- **TradutorBUDA & the BUDA suite** — [portfolio](https://TashiRabten.github.io/BUDA_APPs_Port/) · [demo video](https://youtu.be/6blrTYdL17w)
+- **Interactive OCR demo** — [Hugging Face Space `trabten/tibetan-ocr`](https://huggingface.co/spaces/trabten/tibetan-ocr) · [presentation](https://youtu.be/UMSwbuFfDLk)
+- **Models & datasets** — related Tibetan OCR models and character datasets are published on Hugging Face under [`trabten`](https://huggingface.co/trabten)
+
+If you are a researcher or developer, the engine here is the production source behind those demos.
+
+---
+
+## What was modernized
+
+The upstream Namsel OCR is an excellent but aging Python 2.7 code base. This fork brings it fully up to date:
+
+- **Python 3.12.** Ported from Python 2.7. The five accelerated modules each ship a pure-Python fallback (`fast_utils.py`, `sobel_features.py`, `transitions.py`, `viterbi_cython.py`, `zernike_moments.py`), so a fresh clone runs with no compilation step at all. Building the Cython extensions is optional and only makes it faster — compiled binaries are **not** committed to this repository.
+- **CNN character recognizer.** A PyTorch convolutional model (**1,020 Tibetan character classes, ~95.5% validation accuracy**) replaces the legacy scikit-learn logistic/RBF classifiers. The engine loads the CNN automatically when present and falls back to the sklearn classifier if it is not. See [`namsel_BUDA_OCR/`](namsel_BUDA_OCR).
+- **No `pickle` in the load path.** Every bundled model and dataset now loads through a **data-only** format that cannot execute code on load:
+  | Data | Old | New |
+  |---|---|---|
+  | character maps, n-gram & bigram tables | `pickle` / `shelve` | **gzip + JSON** (`safe_model_io.py`) |
+  | Zernike feature matrices | `pickle`, then `skops` | **NumPy `.npz`**, `allow_pickle=False` (`features/zernike_features.npz`) |
+  | CNN training datasets | `pickle` | **NumPy `.npy`** |
+  | classifiers | `pickle` | **joblib** |
+
+  The safe formats are also smaller (e.g. the syllable-bigram table shrank from 57 MB to 11 MB).
+- **Daemon mode.** [`daemon.py`](daemon.py) exposes a request/response OCR service (`process_request`, `segment_lines`) used by TradutorBUDA and the Docker image.
+- **Hardened engine.** Numerous runtime-robustness fixes and substantial complexity reductions across the segmentation and recognition code.
+
+### Recognition backends
+
+| Backend | Files | Notes |
+|---|---|---|
+| **CNN (default)** | `namsel_BUDA_OCR/best_model.pth` + `label_mapping.json` | PyTorch; `best_model.onnx` / `best_model_int8.onnx` provided for ONNX Runtime |
+| sklearn (fallback) | `logistic-cls`, `rbf-cls` (joblib) | used automatically when the CNN model is absent |
+
+---
+
+## Install
+
+Requires **Python 3.12** and the packages in `requirements.txt` (`numpy`, `opencv-python`, `scikit-learn`, `scikit-image`, `scipy`, `Pillow`, `joblib`, `onnxruntime`, `matplotlib`, `lxml`). `torch` is optional — it is only needed to load `best_model.pth`; the bundled `best_model.onnx` runs on `onnxruntime` alone. `skops` is **no longer required**.
+
+No compiler is needed: every accelerated module has a pure-Python fallback. To build the faster Cython extensions you additionally need `Cython` and a C toolchain.
+
 ```bash
-$ bash ubuntu_install.sh
+pip install -r requirements.txt
+
+# Optional: build the Cython extensions in place for speed.
+# Needs Cython (not in requirements.txt) and a C compiler. Without this step the
+# pure-Python fallbacks are used automatically.
+pip install Cython
+python setup.py build_ext --inplace
 ```
 
-This will install required packages, build the cython modules, unpack datasets, and initiate training for the classifiers. Note that training (classify.py) takes up to an hour or more to complete.
+### Build a standalone macOS daemon package
 
+On macOS, install the Python 3.12 requirements and run `bash installer/macos/build_pkg.sh`. The package is built for the architecture of the Python installation; use Apple Silicon Python for an `arm64` build. See [`installer/macos/README.md`](installer/macos/README.md) for details.
+
+The original project also publishes ready-to-run Docker images:
+
+```bash
+docker pull thubtenrigzin/namsel-ocr:[tag]
+```
 
 ## Quickstart
 
-To start, run preprocessing on folder of images:
-```bash
-$ ./namsel.py preprocess ~/myfolder
-```
-
-This will save new, preprocessed image in ~/myfolder/out. Preprocessing will take a few minutes depending on how many CPUs you have available and how many images are in the folder.
-
-Next, run OCR. If pages are "book" (rather than "pecha") - style pages, do the following:
+Preprocess a folder of page images, then run OCR:
 
 ```bash
-$ ./namsel.py recognize-volume --page_type=book --format=text ~/myfolder/out
+python namsel.py preprocess /path/to/myfolder
+python namsel.py recognize-volume --page_type=book --format=text /path/to/myfolder/out
 ```
 
-To OCR a single page, use the *recognize-page* command and specify a single page file:
+OCR a single page:
 
 ```bash
-$ ./namsel.py recognize-page --page_type=book --format=text ~/myfolder/out/image-01.tif
+python namsel.py recognize-page --page_type=book --format=text /path/to/page-01.tif
 ```
 
-OCR will run and save the results in a file called ocr_output.txt.
+Results are written to `ocr_output.txt`.
+
+---
 
 ## Preprocessing
-Prior to using Namsel, documents in the form of PDFs or images need to be preprocessed. Preprocessing typically involves cleaning up images and putting them in a format Namsel expects.
 
-###Scanning documents
-If you are scanning the documents to be OCR'd yourself, here are some tips for improving chances of getting high quality OCR results:
-- Scan in black and white
-- Scan at a relatively high resolution (400-600 dpi)
-- Utilize the scanner's software to align and crop the pages. If your scanner software supports it, deskewing the page and removing empty borders and images can save time later on in the OCR process. (Scantailor, which is mentioned below, won't remove images, but will deskew (rotate) the page and remove empty borders).
-- Save images in TIFF format with sensible name (e.g. a sequences of numbers 001.tif, 002.tif, etc)
+Scanned documents (PDFs or images) must be cleaned and thresholded to black-and-white before OCR. Black-and-white TIFF is the preferred input.
 
-###Preparing images from PDFs
-If your original document is in PDF format, you will need to convert the individual PDF pages to black and white or grayscale jpg, tif, or png images. Black and white tif images are Namsel's preferred format.
+**Scanning tips:** scan in black and white at 400–600 dpi; deskew and crop in the scanner software; save as sequentially-named TIFF (`001.tif`, `002.tif`, …).
 
-There are a variety of tools for converting a PDF to images. The "gs" command from the Ghostscript project is one.
-
-You can invoke gs itself like so:
+**From PDF:** convert pages to black-and-white images, e.g. with Ghostscript:
 
 ```bash
-$ gs -r600x600 -sDEVICE=tiffg4 -sOutputFile=ocr_%04d.tif -dBATCH -dNOPAUSE mytibetanfile.pdf
+gs -r600x600 -sDEVICE=tiffg4 -sOutputFile=ocr_%04d.tif -dBATCH -dNOPAUSE mytibetanfile.pdf
 ```
 
-This will convert all the pages in the pdf to tiff using the "Group 4" compression, which is the most compact form of TIFF compression for black and white images. If your pdf is in grayscale, replace "tiffg4" with "tiffgray." Images will be unpacked at the location where the bash script or gs is run unless you specify otherwise.
-
-###Preparing images using scantailor
-[Scantailor](https://github.com/scantailor/scantailor) is an open source project for cleaning up scanned documents and preparing them for OCR. Essentially, it performs 5 core operations:
-- Page splitting
-- Deskewing
-- Content isolation
-- Noise removal
-- Thresholding (making characters thinner or more bold)
-
-Optionally, it has tools for page dewarping and manual erasing of image content. While not the only tool for image preprocessing, it typically delivers very good results and is easy to use. (A popular alternative is a project called unpaper).
-
-Scantailor has both a graphical and command line interface. The graphical interface is straightforward to use so we won't describe it here. For faster processing on multicore computers, it is ideal to use the command line version of scantailor in order to process pages in parallel. Namsel comes with a utility for batch, multicore processing with Scantailor called "scantailor_multicore.py."
-
-Example:
-```bash
-python scantailor_multicore.py <my-image-folder> [threshold (optional)]
-```
-
-<my-image-folder> is a path to a directory containing tif or jpg images. Threshold controls how bold or thin to make strokes on the page. A threshold higher than 0 makes text more bold or thick. A threshold less than 0 makes it thin. Poorly inked prints sometime benefit from a threshold of 10-30. Low to medium resolution images converted to grayscale from color scans may benefit from thinning or a threshold of -10 to -40. 
-
-For example
+**With Scantailor** ([scantailor](https://github.com/scantailor/scantailor)) — page splitting, deskewing, content isolation, noise removal, thresholding. For batch multicore processing use the bundled helper:
 
 ```bash
-$ python scantailor_multicore.py my-image-folder -20
+python scantailor_multicore.py <my-image-folder> [threshold]
 ```
 
-...generates a folder called "out" with images that have been cropped, cleaned, thinned, and deskewed by Scantailor.
-
-Alternatively, you can choose to run scantailor from the the Namsel command line. See the section Preprocessing options below.
-
-### Converting TIFF to Group 4 compression
-By default, Scantailor saves images in tiff format using the "lzw" compression format. This format is fine for grayscale and color images, but is unnecessary for black and white images. For black and white tif, convert images to Group 4 (G4) compression if possible. Using the tiffcp utility (part of the libtiff library), convert an entire folder of tiff images like so:
+A positive threshold thickens strokes; a negative one thins them (good range: −40 to 40). This produces an `out/` folder of cleaned images. You can also drive Scantailor from Namsel's own `preprocess` command:
 
 ```bash
-$ mkdir g4
-$ for t in *tif
-$ do
-$ tiffcp -c g4 $t g4/$t
-$ done
+python namsel.py preprocess --layout=double --st_threshold=-15 /path/to/tiffs
 ```
 
-While it is not necessary to use Group 4 (G4) compression, for projects processing thousands of images, G4 format can greatly decrease the amount of disk storage required for images.
-
-## OCR
-###Preprocessing options
-In addition to the above parameters, you can also set parameters for the Scantailor application (used with the "preprocessing" command):
-
-
-  **--layout**
-  
-The layout of pages that Scantailor can expect. Choices are "single" and "double," referring to scanned images that have up to one or two pages on them.
-
-
-  **--threshold**
-  
-The amount of thinning or thickening Scantailor will do. Good values are between -40 and 40. Negative values thin the image, positive values thicken it.
-
-
-Example command:
+## OCR command-line options
 
 ```bash
-$ ./namsel preprocess --layout=double --st_threshold=-15 /path/to/my-folder-of-tiffs
+python namsel.py recognize-page  mytibetantextimage.tif      # single page
+python namsel.py recognize-volume folder-of-tiff-images      # whole volume
 ```
 
-This command will run Scantailor on a folder of tiff-formatted images, command it to split double pages and apply thinning to the characters on the pages.
-### Namsel command line options
-To run Namsel, simply specify the action you'd like Namsel to take and point the the image or images you would like processed. For example, to OCR a single tif image, run:
+Key tunable parameters:
 
-```bash
-$ ./namsel recognize-page mytibetantextimage.tif
-```
+- **`--page_type`** — `book` or `pecha`. Auto-detected from page dimensions if omitted.
+- **`--recognizer`** — `hmm` (use most of the time) or `probout` (better for unusual character combinations / complex segmentation).
+- **`--line_break_method`** — `line_cut` (book pages) or `line_cluster` (pecha and book pages). Auto-chosen if omitted.
+- **`--break_width`** — controls how horizontally-connected stacks are segmented. Typical good values 2–3.5; high values under-segment, low values over-segment.
+- **`--segmenter`** — segmentation strategy; `stochastic` (default) is almost always best.
+- **`--low_ink`** — compensate for poorly-inked texts where glyph strokes are broken.
+- **`--line_cluster_pos`** — `top` or `center`; used with `line_cluster`.
+- **`--postprocess`** — experimental tsek-insertion pass (can mangle otherwise-good output).
+- **`--detect_o`** — temporarily remove long na-ro vowels that inflate width measurements before segmentation.
+- **`--clear_hr`** — detect and remove a horizontal rule / header line (use with caution on pecha).
+- **`--line_cut_inflation`** — dilation iterations in line-cut (rarely changed; default 4).
 
-For an entire volume:
-```bash
-./namsel recognize-volume folder-of-tiff-images
-```
+---
 
-Other options are "preprocess" and "isolate-lines." Preprocessing is discussed below. "Isolate-lines" runs the Namsel pipeline, but only until the line separation stage and outputs the segmented lines as tif images in a directory called "separated-lines" that is created within the parent directory. (TO BE IMPLEMENTED)
+## Training the CNN
 
-OCR quality can vary widely depending on the runtime configuration being used. Below is a list of tunable configuration parameters that Namsel uses. 
+The recognizer is trained from the Tibetan character datasets in `datasets/` — each sample is a label plus a 32×32 grayscale glyph (label + 1024 pixels). See [`namsel_BUDA_OCR/`](namsel_BUDA_OCR):
 
+- `dataset.py` — dataset loading (`.npy`, data-only) and CPU-friendly augmentation
+- `model.py` — the CNN architecture
+- `predict.py` — inference (`TibetanCNNPredictor`)
 
-  **--page_type**
-  
-Choices "book" or "pecha." If not specified, Namsel will attempt to determine the page type based on the length and height of the page.
+Datasets are stored as data-only NumPy `.npy` (label + 1024 pixels per sample).
+Training is GPU/Colab-friendly.
 
+---
 
-  **--recognizer**
-  
-This is the type of recognizer that is used. The options are "hmm" and "probout." Use "hmm" most of the time. If the text you are OCR'ing contains many unusual character combinations and/or many sections requiring complex segmentation, the "probout" recognizer may yield better results.
+## Legacy files
 
+Superseded artifacts are kept under [`legacy/`](legacy) rather than deleted, with a
+[README](legacy/README.md) recording why each was retired. Nothing there is on any code
+path: the Python 2.7 install scripts, the `.skops` Zernike matrices (replaced by
+`features/zernike_features.npz`), the `zernike_scaler-latest` backups, the unused
+`portable_*.pkl` character maps, three orphaned modules, and the CPython 3.10 extension
+binaries. Do not restore anything from `legacy/` without reading the reason it was retired.
 
-  **--line_break_method**
-  
-Options are "line_cut" and "line_cluster." Namsel will attempt to choose for you if this is left unspecified. Generally, "line_cut" works well for book-style pages and "line_cluster" works well for pecha and book-style pages.
+## About the BUDA project
 
-  **--break_width** 
-  
-The value that controls how horizontally-connected stacks will be segmented. A high value (e.g. 4.0) will perform almost no segmentation. A low value (e.g. .5) may severely over-segment characters. Typical good values are 2, 2.5, 3, or 3.5. (Note that some text evade accurate segmentation, in which case there's no "goldlilocks" break-width that will manage to accurately segment wide connected stacks while also avoiding over-segmentation).
+The **BUDA** (Associação BUDA) suite is a set of tools for Tibetan Buddhist study and translation — TradutorBUDA (translation/text editor), GlossarioBUDA (glossary), and related utilities. Namsel-BUDA provides their shared Tibetan OCR capability. See the [BUDA Apps portfolio](https://TashiRabten.github.io/BUDA_APPs_Port/) and [GitHub](https://github.com/TashiRabten).
 
-  **--segmenter**
-  
-The type of segmentation strategy to use. "stochastic" is default and is almost always the best option.
+## Credits & lineage
 
- **--low_ink**
- 
-Default: False. Attempt to compensate for poorly inked texts, particularly cases where the glyphs aren't connected together as part of a single stroke. 
+This project is a fork of **Namsel OCR**, created by **Zach Rowinski** and contributors, with Docker packaging by **Thubten Rigzin** ([thubtenrigzin/namsel-ocr](https://github.com/thubtenrigzin/namsel-ocr)). The original project is described in [*Namsel: An Optical Character Recognition System for Tibetan Text*](https://escholarship.org/uc/item/6d5781k5) (Himalayan Linguistics); OCR'd Tibetan e-texts are available via [BDRC/TBRC](http://tbrc.org).
 
-  **--line_cluster_pos**
-  
-Use with the "line_cluster" line break method. Choices are "top" or "center." Clustering to the center of a line is good for cases where vowels may erroneously get clustered to the above line (on account of being closer to it distance-wise).
-
-  **--postprocess**
-  
-Run a post-processing step. This is usually an attempt to insert missing tsek characters into the final results of an OCR run. This is highly experimental and can severely mangle otherwise accurate OCR.
-
- **--detect_o**
- 
-Detect na-ro vowels prior to segmentation and remove them temporarily. This is useful in cases where the na-ro vowels are long and adversely inflating char-width measurements (measurements that are used to determine how and when to segment horizontally touching stacks).
-
-  **--clear_hr**
-  
-Identify and remove horizontal rule or line on the top of a page. Set to True when you want to get ride of title or chapter  lines that appear on each page. Note: use with caution if page_type is "pecha"
-
- **--line_cut_inflation**
- 
-Rarely used. The number of iterations when dilating text in line cut. Increase this value when need to blob things together. Default is 4 iterations.
-
-### Optional: generate data yourself from fonts
-This is strictly optional. The provided datasets already include these datapoints. These commands are also run automatically if you run ubuntu_install.sh.
-
-Install fonts:
-
-```bash
-$ cd namsel-ocr
-$ sudo apt-get install python-cairo
-$ mkdir -p ~/.fonts
-$ cp data_generation/fonts/*ttf ~/.fonts/
-$ fc-cache -f -v
-```
-
-Generate the font-derived datasets:
-```bash
-$ cd data_generation
-$ python font_draw.py
-```
+The namsel_buda modernization — Python 3.12 port, CNN recognizer, pickle-free model/data formats, and daemon integration — is by **Tashi Rabten** for the Associação BUDA suite.
 
 ### About the name
-Namsel is an English rendering of the Tibetan རྣམ་གསལ (transliterated: rnam gsal). Literally translated, རྣམ can be thought of as "thorough" or "in detail" and གསལ can be thought of as "clear", "illuminated." Put together, Namsel can be taken to mean "making clear the details" or "thoroughly illuminating," which are both appropriate descriptions of what the Namsel project is trying to do. Practically speaking, the name was also chosen because it is reasonably easy for non-Tibetan speakers to read and pronounce correctly.
+
+*Namsel* renders the Tibetan རྣམ་གསལ (*rnam gsal*) — "making clear the details," "thoroughly illuminating." *BUDA* marks this fork's home in the BUDA project ecosystem.
+
+## License
+
+Retains the original Namsel OCR license (see [`LICENSE`](LICENSE)). Bundled third-party components retain their respective licenses.

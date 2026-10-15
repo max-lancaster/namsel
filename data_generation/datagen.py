@@ -72,8 +72,8 @@ if __name__ == '__main__':
     
     if args.type == 'lines' or args.type == 'syllables':
         if not args.filename:
-            print 'Error: --filename not specified. You must specify a file \
-containing lines of text to be generated'
+            print('Error: --filename not specified. You must specify a file \
+containing lines of text to be generated')
             sys.exit()
         generate_lines(args.linefl, spacing=(args.spacing or "all"))
     elif args.type == 'stacks':

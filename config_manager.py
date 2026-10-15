@@ -5,14 +5,21 @@ import json
 import codecs
 import os
 import glob
-import numpy as np
-from utils import create_unique_id, local_file
-from collections import Counter
+try:
+    from .utils import create_unique_id
+except ImportError:
+    from utils import create_unique_id
 
-CONF_DIR = './confs'
+
+# Resolve confs dir relative to this file's location (works in frozen PyInstaller apps)
+_MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
+CONF_DIR = os.path.join(_MODULE_DIR, 'confs')
 
 if not os.path.exists(CONF_DIR):
-    os.mkdir(CONF_DIR)
+    try:
+        os.mkdir(CONF_DIR)
+    except OSError:
+        pass  # Read-only filesystem in frozen app — confs may be pre-bundled
 
 def _open(fl, mode='r'):
     return codecs.open(fl, mode, encoding='utf-8')
@@ -20,8 +27,8 @@ def _open(fl, mode='r'):
 default_config = {
     'page_type': 'book',
     'line_break_method': 'line_cut',
-    'recognizer': 'hmm', # or probout
-    'break_width': 2.0,
+    'recognizer': 'probout', # or hmm (changed to probout as default due to better reliability)
+    'break_width': 2.0,  # Increased to reduce false spacing in larger images
     'segmenter': 'stochastic', # or experimental
     'combine_hangoff': .6,
     'low_ink': False,
@@ -32,6 +39,14 @@ default_config = {
     'detect_o': False,
     'clear_hr': False,
     'line_cut_inflation': 4, # The number of iterations when dilating text in line cut. Increase this value when need to blob things together
+    'debug_output': False, # Enable debug output (warnings, preprocessing messages, etc.)
+    'debug_output_dir': '.', # Directory to save debug files and interactive segmentation results
+    'enable_interactive_segmentation': False, # Enable interactive manual segmentation for wide characters
+    'force_single_line': False, # Skip multiline auto-detection for pre-segmented line images
+    'test_simple_normalize': False,  # Test simple 32x32 normalization for scale invariance
+    'test_normalized_features': False,  # Test normalized features for scale invariance
+    'test_improved_normalize': False,  # Test improved fnormalize algorithm without sqrt
+    'compound_syllable_gap_tolerance': 0.15,  # Gap tolerance for compound syllables (ratio of char_mean). Allows small gaps between diacritics and base characters, like ã in Brazilian Portuguese
 }
 
 def update_default():
@@ -51,9 +66,9 @@ def create_misc_confs():
 
 class Config(object):
     def __init__(self, path=None, save_conf=False, **kwargs):
-        
 
-        self.conf = default_config
+
+        self.conf = dict(default_config)  # Copy to avoid mutating the global default
         
             
         self.path = path
@@ -82,8 +97,8 @@ class Config(object):
             for k in conf:
                 self.conf[k] = conf[k]
         except IOError:
-            print 'Error in loading json file at %s. Using default config' % path
-            self.conf = default_config
+            print('Error in loading json file at %s. Using default config' % path)
+            self.conf = dict(default_config)
     
      
     def _save_conf(self):

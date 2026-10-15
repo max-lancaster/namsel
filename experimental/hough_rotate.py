@@ -28,13 +28,13 @@ def get_avg_angle(a, draw=False):
 
 def rotate_img(src):
     '''Rotate an image given a file path'''
-    print src
+    print(src)
     im1 = Image.open(src).convert('L')
     a = np.asarray(im1)/255
     a = ((a*-1) + 1).astype(np.uint8)
 #    avg_angle = get_avg_angle(a, draw=True)
     avg_angle = get_avg_angle(a)
-    print avg_angle
+    print(avg_angle)
     a = rotation(a, avg_angle)
     a = (a*-1) + 1
     Image.fromarray(a*255).convert('L').show()
@@ -49,7 +49,7 @@ def rotate_img_arr(a):
     return 255*((a*-1) + 1)
     
 def rotate_img_cli(src):
-    print src
+    print(src)
     im1 = Image.open(src).convert('L')
     a = np.asarray(im1)/255
     a = ((a*-1) + 1).astype(np.uint8)

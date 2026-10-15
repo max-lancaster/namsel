@@ -1,6 +1,5 @@
 # encoding: utf-8
 
-import cPickle as pickle
 import numpy as np
 from sklearn.mixture import GMM
 from collections import Counter
@@ -102,9 +101,9 @@ def granular_smooth(all_lines):
     '''this is broken'''
     
     second_pass = []
-    punc = set(u'་། ')
+    punc = set('་། ')
     def reset_chars(s):
-        r = set(u' )\t')
+        r = set(' )\t')
         if s in r:
             reset = True
         else:
@@ -112,12 +111,12 @@ def granular_smooth(all_lines):
         return reset
     
     
-    all_lines = zip(range(len(all_lines)), all_lines)
-    all_lines = map(list, all_lines)
+    all_lines = list(zip(list(range(len(all_lines))), all_lines))
+    all_lines = list(map(list, all_lines))
     spass_items = []
     just_punc = []
     for i in all_lines:
-        if i[1] not in u'་།':
+        if i[1] not in '་།':
             spass_items.append(i)
         else:
             just_punc.append(i)
@@ -154,7 +153,7 @@ def granular_smooth(all_lines):
     s = all_lines[-1]
     if s[1] in punc:
         s[1] = prev_size
-    elif s[1] != spass_items[-2][1] and spass_items[-2][1] not in u' )':
+    elif s[1] != spass_items[-2][1] and spass_items[-2][1] not in ' )':
         s[1] = spass_items[-2][1]
     second_pass.append(s)
     
@@ -218,7 +217,7 @@ def granular_smooth(all_lines):
 def line_smooth(all_lines):
     smoothed = []
     cnts = Counter()
-    map(cnts.update, all_lines)
+    list(map(cnts.update, all_lines))
     if cnts['b'] > cnts['s']:
         sizemode = 'b'
     else:
@@ -255,9 +254,9 @@ def segment_smooth(all_lines):
         sizemode = 's'
             
     for j, s in enumerate(all_lines):
-        if s in u'། ()〈〉༽༼༔༑':
+        if s in '། ()〈〉༽༼༔༑':
 #             print 'val is', s,
-            if s in u'། )〉༽༔༑':
+            if s in '། )〉༽༔༑':
                 cur_seg.append(s)
 #                 print 'segment added', s
 #                 print
@@ -265,7 +264,7 @@ def segment_smooth(all_lines):
             for sz in _majority_smooth(cur_seg, sizemode):
                 smoothed_sizes.append(sz)
             
-            if s in u'(〈༼':
+            if s in '(〈༼':
                 cur_seg = [s]
 #                 print 'segment added', s
 #                 print
@@ -294,7 +293,7 @@ def assign_sizes_for_page(content, stack_inx_pointer, stacks_gmms, stack_mean, p
 #         prev_size = 'b'
         cur_line = []
         for s in line:
-            if s[-1] in u'་། ()〈〉༽༼༔༑' or num_stacks(s[-1]) > 1 :   
+            if s[-1] in '་། ()〈〉༽༼༔༑' or num_stacks(s[-1]) > 1 :   
 #                 size = prev_size
                 if smooth_method == 'line_smooth':
                     cur_line.append(s[-1])
@@ -338,7 +337,7 @@ def assign_sizes_for_page(content, stack_inx_pointer, stacks_gmms, stack_mean, p
     else:
         second_pass = []
         for i, s in enumerate(all_lines):
-            if s in u'་། ()〈〉༽༼༔༑':
+            if s in '་། ()〈〉༽༼༔༑':
                 s = prev_size
                 second_pass.append(prev_size)
             else:
@@ -346,7 +345,7 @@ def assign_sizes_for_page(content, stack_inx_pointer, stacks_gmms, stack_mean, p
                 prev_size = s
     if not second_pass:
         mode = 's'
-        print 'WARNING: using default value for mode'
+        print('WARNING: using default value for mode')
     else:
         mode = statsmode(second_pass)[0][0]
     final_lines = []
@@ -392,7 +391,7 @@ def generate_formatting(page_objects, smooth_method='', ignore_first_line=False)
                 continue
             for char in line:
                 try:
-                    if char[2] not in (-1, 0) and num_stacks(char[-1]) == 1 and char[-1] not in u'་།':
+                    if char[2] not in (-1, 0) and num_stacks(char[-1]) == 1 and char[-1] not in '་།':
     #                     allchars.append(char[-1])
     #                     allsizes.append(char[3]) # using height rather than width
                         allsizes.append(char[2])
@@ -401,17 +400,17 @@ def generate_formatting(page_objects, smooth_method='', ignore_first_line=False)
     #                     cl.append(char[3])
                         single_chars[char[-1]] = cl
                 except:
-                    print char, line, content
+                    print(char, line, content)
                     raise
     
     
     stack_mean = np.mean(allsizes)
     
     ### Modeling distributions of sizes
-    print 'modeling distribution of widths'
+    print('modeling distribution of widths')
     maxsize = np.min([200, np.max(allsizes)])
     arrs = []
-    keys = single_chars.keys()
+    keys = list(single_chars.keys())
     for c in keys:
         vals = single_chars[c]
 #         plt.hist(vals, max(10, len(vals)/10))
@@ -442,17 +441,17 @@ def generate_formatting(page_objects, smooth_method='', ignore_first_line=False)
     pooled_gmms = {}
     stack_group_inx = {}
     for i, gr in enumerate(letter_groups):
-        print 'group ------'
+        print('group ------')
         group_ws = []
         for l in gr:
-            print l,
+            print(l, end=' ')
             group_ws.extend(single_chars[l])
             stack_group_inx[l] = i
-        print
+        print()
         if group_ws:
             gmm = get_gmm_for_stack(group_ws)
             pooled_gmms[i] = gmm
-            print '\tgroup', i, 'has', len(gmm.means_), 'dists. Converged? ', gmm.converged_
+            print('\tgroup', i, 'has', len(gmm.means_), 'dists. Converged? ', gmm.converged_)
 #             if u'ཚ' in gr:
 #                 from matplotlib.mlab import normpdf
             n,bins,p = plt.hist(group_ws, maxsize+1, normed=True)
@@ -462,13 +461,13 @@ def generate_formatting(page_objects, smooth_method='', ignore_first_line=False)
             plt.savefig('/media/zr/zr-mechanical/kandze3_hists/%s' % gr[0])
             plt.clf()
 #             import sys; sys.exit()
-        print
-        print '-------'
+        print()
+        print('-------')
     
-    print "converged?", dpgmm.converged_
-    print 'number of chars in each group:'
+    print("converged?", dpgmm.converged_)
+    print('number of chars in each group:')
     for i in letter_groups:
-        print len(i),
+        print(len(i), end=' ')
     stacks_gmms = pooled_gmms
 #     import sys; sys.exit()
     ##### Create a GMM for widths corresponding to each stack
@@ -530,9 +529,9 @@ def generate_formatting(page_objects, smooth_method='', ignore_first_line=False)
     return page_objects
         
 def show_sample_page(page_object):
-    print 'generating a sample image to view'
+    print('generating a sample image to view')
     pginfo = page_object['other_page_info']
-    print page_object['tiffname']
+    print(page_object['tiffname'])
     contents = json.loads(zlib.decompress(pginfo.decode('string-escape')))
     size_info = page_object['line_boundaries']
     slines = size_info.split('\n')

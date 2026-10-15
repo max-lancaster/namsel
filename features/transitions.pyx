@@ -4,7 +4,7 @@ cimport cython
 from cython.parallel import parallel, prange
 
 DTYPE = np.uint8
-ctypedef np.int_t DTYPE_t
+ctypedef np.intp_t DTYPE_t
 
 #@cython.wraparound(False) # this breaks things sometimes
 # cpdef transition_features(np.ndarray[np.uint8_t, ndim=2] a not None):

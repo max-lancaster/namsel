@@ -49,7 +49,7 @@ style_new = '''    <style type="text/css">
     td {font-family: "Qomolangma-Uchen Sarchung" !important}
     </style>'''
 
-multiple_spaces = re.compile(ur'[ \t]{1,}')
+multiple_spaces = re.compile(r'[ \t]{1,}')
 
 pwd = os.getcwd()
 
@@ -66,11 +66,11 @@ def _normalize_input(txt):
     txt = '\n'.join(lines)
     # collapse multiple spaces to 1 space
     txt = multiple_spaces.sub(' ', txt)
-    txt = txt.replace(u'༎', u'།།')
-    txt = txt.replace(u'<', u'〈')
-    txt = txt.replace(u'>', u'〉')
-    txt = txt.replace(u'༑', u'་།་')
-    txt = txt.replace(u'-', u'—')
+    txt = txt.replace('༎', '།།')
+    txt = txt.replace('<', '〈')
+    txt = txt.replace('>', '〉')
+    txt = txt.replace('༑', '་།་')
+    txt = txt.replace('-', '—')
     return txt
 
 def _make_html_diff(txt, ocr):    
@@ -122,7 +122,7 @@ if __name__ == '__main__':
         
     from sklearn.externals.joblib import Parallel, delayed
     timestamp = datetime.datetime.now()
-    comment = raw_input('Comment: ')
+    comment = input('Comment: ')
     for t in test_vols:
         os.chdir(os.path.abspath(t))
         
@@ -134,7 +134,7 @@ if __name__ == '__main__':
         
         pool = multiprocessing.Pool()
     #     all_data = Parallel(n_jobs=12)(delayed(_get_compare_data)(i) for i in zip(tifs, txts))
-        all_data = pool.map(_get_compare_data, zip(tifs, txts))
+        all_data = pool.map(_get_compare_data, list(zip(tifs, txts)))
         
 #         all_data = []
 #         for i in zip(tifs, txts):
@@ -148,7 +148,7 @@ if __name__ == '__main__':
                    headers={'Referer': 'https://dhattupages.appspot.com/'}, 
                            allow_redirects=True)
             
-            print 'posting data for ', t
+            print('posting data for ', t)
             for data in all_data:
                 data['csrfmiddlewaretoken'] = s.cookies['csrftoken']
                 data['sample_set'] = t
